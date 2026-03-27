@@ -35,8 +35,8 @@ select { padding: 10px; font-size: 16px; margin-top: 10px; }
 </div>
 
 <script>
-const client_id = "YOUR_CLIENT_ID_HERE"; // Spotify Client ID
-const redirect_uri = "http://127.0.0.1:8000/index.html"; // Must match Spotify app
+const client_id = "80ab7bcad7fa42ca845867919fbacfd5"; // Spotify Client ID
+const redirect_uri = "https://github.com/Harty551655/Spotify-Guessing-Game"; // Must match Spotify app
 const scope = "playlist-read-private";
 
 // Game variables
