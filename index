@@ -2,61 +2,47 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Guess The Song (Spotify + PKCE)</title>
+<title>Guess The Song</title>
 <style>
 body { font-family: Arial; background: #121212; color: white; text-align: center; }
-h1 { margin-top: 20px; }
 #game { display: none; margin-top: 20px; }
-input { padding: 10px; font-size: 16px; width: 300px; }
-button { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; border-radius: 5px; border: none; }
-#loginBtn { background: #1DB954; color: white; }
-#submitGuess { background: orange; color: white; }
-#nextSong { background: red; color: white; }
-#scoreboard { margin-top: 20px; font-size: 18px; }
-audio { margin-top: 20px; }
-select { padding: 10px; font-size: 16px; margin-top: 10px; }
+button { padding: 10px 20px; margin: 10px; cursor: pointer; }
+input { padding: 10px; width: 250px; }
 </style>
 </head>
+
 <body>
-<h1>🎵 Guess The Song (Spotify + PKCE) 🎵</h1>
+
+<h1>🎵 Guess The Song 🎵</h1>
 
 <div id="loginDiv">
   <button id="loginBtn">Login with Spotify</button>
 </div>
 
 <div id="game">
-  <p id="status">Select a playlist to start</p>
+  <p id="status">Select playlist</p>
   <select id="playlistSelect"></select><br>
-  <audio id="audio" controls></audio><br>
-  <input type="text" id="guessInput" placeholder="Enter song name...">
-  <button id="submitGuess">Submit Guess</button>
-  <button id="nextSong">Skip</button>
-  <div id="scoreboard">Score: 0 | Streak: 0 | Lives: 3</div>
+  <audio id="audio" controls></audio><br><br>
+
+  <input id="guessInput" placeholder="Guess song name">
+  <button id="submitGuess">Guess</button>
+
+  <p id="score">Score: 0 | Lives: 3</p>
 </div>
 
 <script>
-const client_id = "80ab7bcad7fa42ca845867919fbacfd5"; // Spotify Client ID
-const redirect_uri = "https://github.com/Harty551655/Spotify-Guessing-Game"; // Must match Spotify app
+const client_id = "YOUR_CLIENT_ID_HERE";
+const redirect_uri = "https://YOURNAME.github.io/spotify-guess-game/";
 const scope = "playlist-read-private";
 
-// Game variables
 let access_token = "";
 let songs = [];
 let currentSong = null;
 let score = 0;
-let streak = 0;
 let lives = 3;
 
-// Normalize song names
-function normalizeName(name) {
-  let n = name.toLowerCase();
-  n = n.replace(/\.[^/.]+$/, "");
-  n = n.replace(/\(.*?\)|\[.*?\]/g, "");
-  if (n.includes(" - ")) n = n.split(" - ")[1];
-  return n.trim();
-}
+// ---------------- PKCE ----------------
 
-// Generate random string for PKCE
 function generateRandomString(length) {
   let text = "";
   const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -66,34 +52,57 @@ function generateRandomString(length) {
   return text;
 }
 
-// Base64 encode
-function base64encode(string) {
-  return btoa(String.fromCharCode.apply(null, new Uint8Array(string)))
+async function sha256(plain) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(plain);
+  return await crypto.subtle.digest("SHA-256", data);
+}
+
+function base64encode(input) {
+  return btoa(String.fromCharCode(...new Uint8Array(input)))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 }
 
-// SHA256 hash
-async function sha256(plain) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(plain);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return hash;
-}
+// ---------------- LOGIN ----------------
 
-// PKCE flow
-async function loginPKCE() {
+document.getElementById("loginBtn").onclick = async () => {
   const codeVerifier = generateRandomString(128);
   localStorage.setItem("code_verifier", codeVerifier);
 
-  const codeChallenge = base64encode(await sha256(codeVerifier));
-  const url = `https://accounts.spotify.com/authorize?response_type=code&client_id=${client_id}&scope=${encodeURIComponent(scope)}&redirect_uri=${encodeURIComponent(redirect_uri)}&code_challenge_method=S256&code_challenge=${codeChallenge}`;
-  
-  window.location = url;
-}
+  const hashed = await sha256(codeVerifier);
+  const codeChallenge = base64encode(hashed);
 
-// Exchange code for token
+  const authUrl =
+    `https://accounts.spotify.com/authorize?` +
+    `client_id=${client_id}` +
+    `&response_type=code` +
+    `&redirect_uri=${encodeURIComponent(redirect_uri)}` +
+    `&scope=${encodeURIComponent(scope)}` +
+    `&code_challenge_method=S256` +
+    `&code_challenge=${codeChallenge}`;
+
+  window.location = authUrl;
+};
+
+// ---------------- HANDLE REDIRECT ----------------
+
+window.onload = async () => {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+
+  if (code) {
+    console.log("Code received:", code);
+    await getToken(code);
+
+    // Clean URL
+    window.history.replaceState({}, document.title, "/");
+  }
+};
+
+// ---------------- TOKEN EXCHANGE ----------------
+
 async function getToken(code) {
   const codeVerifier = localStorage.getItem("code_verifier");
 
@@ -107,9 +116,7 @@ async function getToken(code) {
 
   const res = await fetch("https://accounts.spotify.com/api/token", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body
   });
 
@@ -119,131 +126,85 @@ async function getToken(code) {
   access_token = data.access_token;
 
   if (!access_token) {
-    alert("Token failed. Check console.");
+    alert("Login failed. Check console.");
     return;
   }
 
   document.getElementById("loginDiv").style.display = "none";
   document.getElementById("game").style.display = "block";
 
-  await loadPlaylists();
+  loadPlaylists();
 }
 
-  const res = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body
-  });
-  const data = await res.json();
-  access_token = data.access_token;
-  document.getElementById("loginDiv").style.display = "none";
-  document.getElementById("game").style.display = "block";
-  await loadPlaylists();
-}
+// ---------------- PLAYLIST ----------------
 
-// Parse URL params
-function getQueryParam(name) {
-  const urlParams = new URLSearchParams(window.location.search);
-  return urlParams.get(name);
-}
-
-// Login button
-document.getElementById("loginBtn").addEventListener("click", loginPKCE);
-
-// On load, check for code
-window.onload = async () => {
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get("code");
-
-  if (code) {
-    console.log("Code received:", code);
-    await getToken(code);
-
-    // Clean URL after login
-    window.history.replaceState({}, document.title, "/");
-  } else {
-    console.log("No code in URL");
-  }
-};
-
-// Load user playlists
 async function loadPlaylists() {
   const res = await fetch("https://api.spotify.com/v1/me/playlists", {
     headers: { Authorization: "Bearer " + access_token }
   });
+
   const data = await res.json();
   const select = document.getElementById("playlistSelect");
-  select.innerHTML = "";
+
   data.items.forEach(p => {
-    const option = document.createElement("option");
-    option.value = p.id;
-    option.text = p.name;
-    select.appendChild(option);
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.text = p.name;
+    select.appendChild(opt);
   });
 
-  select.addEventListener("change", async () => {
-    await loadSongsFromPlaylist(select.value);
-    playRandomSong();
-  });
+  select.onchange = async () => {
+    await loadSongs(select.value);
+    playRandom();
+  };
 }
 
-// Load tracks from playlist
-async function loadSongsFromPlaylist(playlistId) {
-  const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+async function loadSongs(id) {
+  const res = await fetch(`https://api.spotify.com/v1/playlists/${id}/tracks`, {
     headers: { Authorization: "Bearer " + access_token }
   });
+
   const data = await res.json();
+
   songs = data.items
-    .map(item => item.track)
-    .filter(track => track.preview_url)
-    .map(track => ({ name: track.name, preview: track.preview_url }));
+    .map(i => i.track)
+    .filter(t => t && t.preview_url)
+    .map(t => ({
+      name: t.name.toLowerCase(),
+      preview: t.preview_url
+    }));
 }
 
-// Play a random song
-function playRandomSong() {
+// ---------------- GAME ----------------
+
+function playRandom() {
   if (lives <= 0) {
-    document.getElementById("status").innerText = `💀 Game Over! Final Score: ${score}`;
-    document.getElementById("audio").src = "";
+    document.getElementById("status").innerText = "Game Over";
     return;
   }
-  const randomIndex = Math.floor(Math.random() * songs.length);
-  currentSong = songs[randomIndex];
+
+  currentSong = songs[Math.floor(Math.random() * songs.length)];
   const audio = document.getElementById("audio");
+
   audio.src = currentSong.preview;
   audio.play();
-  document.getElementById("status").innerText = "🎶 Guess the song!";
-  document.getElementById("guessInput").value = "";
 }
 
-// Check guess
-document.getElementById("submitGuess").addEventListener("click", () => {
-  const guess = normalizeName(document.getElementById("guessInput").value);
-  const correct = normalizeName(currentSong.name);
+document.getElementById("submitGuess").onclick = () => {
+  const guess = document.getElementById("guessInput").value.toLowerCase();
 
-  if (guess && guess === correct) {
+  if (guess === currentSong.name) {
     score++;
-    streak++;
-    document.getElementById("status").innerText = `✅ Correct! It was: ${currentSong.name}`;
   } else {
     lives--;
-    streak = 0;
-    document.getElementById("status").innerText = `❌ Wrong! It was: ${currentSong.name}`;
   }
 
-  document.getElementById("scoreboard").innerText =
-    `Score: ${score} | Streak: ${streak} | Lives: ${lives}`;
+  document.getElementById("score").innerText =
+    `Score: ${score} | Lives: ${lives}`;
 
-  if (lives > 0) setTimeout(playRandomSong, 2000);
-});
-
-// Skip button
-document.getElementById("nextSong").addEventListener("click", () => {
-  lives--;
-  streak = 0;
-  document.getElementById("scoreboard").innerText =
-    `Score: ${score} | Streak: ${streak} | Lives: ${lives}`;
-  playRandomSong();
-});
+  playRandom();
+};
 </script>
+
 </body>
 </html>
