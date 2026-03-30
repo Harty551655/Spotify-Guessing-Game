@@ -36,7 +36,7 @@ input { padding: 10px; width: 250px; }
 // ================= CONFIG =================
 
 const client_id = "80ab7bcad7fa42ca845867919fbacfd5";
-const redirect_uri = "https://github.com/Harty551655/Spotify-Guessing-Game";
+const redirect_uri = "https://harty551655.github.io/Spotify-Guessing-Game/";
 
 // ==========================================
 
