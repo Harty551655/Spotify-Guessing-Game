@@ -96,13 +96,38 @@ async function loginPKCE() {
 // Exchange code for token
 async function getToken(code) {
   const codeVerifier = localStorage.getItem("code_verifier");
+
   const body = new URLSearchParams({
-    client_id,
+    client_id: client_id,
     grant_type: "authorization_code",
-    code,
-    redirect_uri,
+    code: code,
+    redirect_uri: redirect_uri,
     code_verifier: codeVerifier
   });
+
+  const res = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: body
+  });
+
+  const data = await res.json();
+  console.log("Token response:", data);
+
+  access_token = data.access_token;
+
+  if (!access_token) {
+    alert("Token failed. Check console.");
+    return;
+  }
+
+  document.getElementById("loginDiv").style.display = "none";
+  document.getElementById("game").style.display = "block";
+
+  await loadPlaylists();
+}
 
   const res = await fetch("https://accounts.spotify.com/api/token", {
     method: "POST",
@@ -127,8 +152,18 @@ document.getElementById("loginBtn").addEventListener("click", loginPKCE);
 
 // On load, check for code
 window.onload = async () => {
-  const code = getQueryParam("code");
-  if (code) await getToken(code);
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+
+  if (code) {
+    console.log("Code received:", code);
+    await getToken(code);
+
+    // Clean URL after login
+    window.history.replaceState({}, document.title, "/");
+  } else {
+    console.log("No code in URL");
+  }
 };
 
 // Load user playlists
